@@ -4,13 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.bee.calenvoice.ui.VoiceCaptureScreen
+
 import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,29 +14,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CalenVoiceTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                // UI dulu — belum ada logic. Ganti dengan viewModel.uiState dan
+                // callback VoiceReminderViewModel setelah repository terisi.
+                VoiceCaptureScreen(onRecord = {})
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    CalenVoiceTheme {
-        Greeting("Android")
     }
 }
