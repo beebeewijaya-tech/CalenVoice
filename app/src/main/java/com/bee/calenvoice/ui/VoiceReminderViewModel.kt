@@ -1,6 +1,7 @@
 package com.bee.calenvoice.ui
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.bee.calenvoice.data.CalendarRepository
 import com.bee.calenvoice.data.InferenceRepository
 import com.bee.calenvoice.data.SpeechRepository
@@ -9,6 +10,8 @@ import com.bee.calenvoice.model.Reminder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /** State yang turun dari ViewModel ke View sebagai StateFlow (MVVM, Gambar 2.2). */
 data class VoiceReminderUiState(
@@ -38,16 +41,40 @@ class VoiceReminderViewModel(
     val uiState: StateFlow<VoiceReminderUiState> = _uiState.asStateFlow()
 
     /** Fitur 1 → validasi regex → Fitur 2 (Gambar 4.1 dan 4.2). */
-    fun onRecordClicked() { TODO() }
+    fun onRecordClicked() {
+        _uiState.update {
+            it.copy(
+                recording = RecordingState.RECORDING,
+                elapsedSeconds = 0,
+                transcriptText = "",
+                reminder = null,
+                savedEventId = null,
+                error = null
+            )
+        }
+    }
 
     /** Berhenti lebih awal; auto-stop di detik 60 juga lewat sini. */
-    fun onStopClicked() { TODO() }
+    fun onStopClicked() {
+        // Mengubah status perekaman ke IDLE atau memanggil fungsi penghentian perekaman
+        _uiState.update { it.copy(recording = RecordingState.IDLE) }
+    }
 
     /** Batal — kembali ke IDLE tanpa memanggil Gemini. */
-    fun onCancelClicked() { TODO() }
+    fun onCancelClicked() {
+        _uiState.update { VoiceReminderUiState() }
+    }
 
     /** Fitur 3 — simpan draf yang sedang tampil ke kalender perangkat (Gambar 4.3). */
-    fun onSaveClicked() { TODO() }
+    fun onSaveClicked() {
+        val currentReminder = _uiState.value.reminder ?: return
 
-    fun onRetry() { TODO() }
+        viewModelScope.launch {
+            _uiState.update { it.copy(error = null) }
+        }
+    }
+
+    fun onRetry() {
+        _uiState.update { VoiceReminderUiState() }
+    }
 }
