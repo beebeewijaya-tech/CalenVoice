@@ -1,0 +1,25 @@
+[
+  {
+    "date": "2026-10-08",
+    "macrostructure": "n/a — Android screen, single centred column",
+    "genre": "modern-minimal",
+    "theme": "brand-locked (preserved: Maroon / Cream / OffWhite / Rose)",
+    "theme_axes": "light / system-sans / warm",
+    "vibe": "simple, clean, Material 3 native",
+    "enrichment": "Tier A — mic glyph drawn in Canvas, no icon dependency",
+    "platform": "Jetpack Compose (Android) — no nav/footer archetype",
+    "brief": "CalenVoice · rapikan UI + tambah tampilan PROCESSING",
+    "note": "Diversifikasi ditangguhkan: satu aplikasi, palet merek harus tetap."
+  },
+  {
+    "date": "2026-10-07",
+    "macrostructure": "Marquee Hero",
+    "genre": "editorial",
+    "theme": "custom",
+    "theme_axes": "light / serif-light / warm",
+    "vibe": "austere, printed, warm oxblood",
+    "enrichment": "none",
+    "platform": "Jetpack Compose (Android) — no nav/footer archetype",
+    "brief": "CalenVoice · layar utama IDLE perekam suara"
+  }
+]

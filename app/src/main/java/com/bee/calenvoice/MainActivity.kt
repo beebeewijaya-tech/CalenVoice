@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.bee.calenvoice.ui.VoiceCaptureScreen
+import com.bee.calenvoice.ui.VoiceReminderUiState
 
 import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 
@@ -16,7 +17,11 @@ class MainActivity : ComponentActivity() {
             CalenVoiceTheme {
                 // UI dulu — belum ada logic. Ganti dengan viewModel.uiState dan
                 // callback VoiceReminderViewModel setelah repository terisi.
-                VoiceCaptureScreen(onRecord = {})
+                VoiceCaptureScreen(
+                    state = VoiceReminderUiState(),
+                    onRecord = {},
+                    onCancel = {},
+                )
             }
         }
     }
