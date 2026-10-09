@@ -4,9 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.bee.calenvoice.ui.VoiceCaptureScreen
-import com.bee.calenvoice.ui.VoiceReminderUiState
-
+import com.bee.calenvoice.ui.DemoNavHost
 import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 
 class MainActivity : ComponentActivity() {
@@ -15,13 +13,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CalenVoiceTheme {
-                // UI dulu — belum ada logic. Ganti dengan viewModel.uiState dan
-                // callback VoiceReminderViewModel setelah repository terisi.
-                VoiceCaptureScreen(
-                    state = VoiceReminderUiState(),
-                    onRecord = {},
-                    onCancel = {},
-                )
+                // SEMENTARA — navigasi dummy untuk menguji ketiga tampilan.
+                // Ganti dengan VoiceReminderViewModel setelah repository terisi,
+                // lalu hapus ui/DemoNavHost.kt.
+                DemoNavHost()
             }
         }
     }
