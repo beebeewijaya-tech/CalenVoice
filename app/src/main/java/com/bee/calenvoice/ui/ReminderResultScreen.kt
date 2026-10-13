@@ -1,380 +1,320 @@
 package com.bee.calenvoice.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.bee.calenvoice.model.Reminder
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import com.bee.calenvoice.model.Reminder
+import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 
-
+/**
+ * Fitur 3: Konfirmasi Draf Reminder dan Simpan ke Kalender HP.
+ *
+ * Murni View dalam pola MVVM (Gambar 2.2): hanya menggambar state dan meneruskan
+ * event ke ViewModel, tanpa logika alur. Tema dan susunan header sengaja disamakan
+ * dengan VoiceCaptureScreen supaya dua layar terasa satu aplikasi.
+ *
+ * Urutan cabang `when` penting: loading menang atas sukses, sukses menang atas error,
+ * dan error menang atas draf.
+ *
+ * @param isPermissionError true jika gagal karena izin kalender, supaya tombol
+ * "Buka Pengaturan" ikut tampil (UC-01 Alur Alternatif D).
+ * @param onOpenSettings dipanggil saat tombol "Buka Pengaturan" ditekan.
+ */
 @Composable
 fun ReminderResultScreen(
     reminder: Reminder?,
-    isLoading: Boolean = false,
+    isSaving: Boolean = false,
     errorMessage: String? = null,
     isSuccess: Boolean = false,
-    onSaveClicked: () -> Unit,
-    onRetryClicked: () -> Unit,
-    onDoneClicked: () -> Unit
+    isPermissionError: Boolean = false,
+    onSave: () -> Unit,
+    onRetry: () -> Unit,
+    onDone: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) = Column(
+    modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)
+        .safeDrawingPadding()
+        .padding(horizontal = 24.dp, vertical = 16.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Color.White
+    // Header aplikasi, sama dengan layar rekam.
+    Text(
+        "Reminder Suara AI",
+        Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    Spacer(Modifier.weight(1f))
+
+    // Konten dinamis berdasarkan state penyimpanan kalender.
+    when {
+        isSaving -> SavingContent()
+        isSuccess -> SuccessContent(reminder, onDone)
+        errorMessage != null -> ErrorContent(errorMessage, isPermissionError, onRetry, onOpenSettings)
+        reminder != null -> DraftContent(reminder, onSave)
+    }
+
+    Spacer(Modifier.weight(1f))
+}
+
+/** Tampilan loading: saat sistem menulis ke Android CalendarContract. */
+@Composable
+private fun SavingContent() = Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+) {
+    CircularProgressIndicator(
+        Modifier.size(56.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        strokeWidth = 5.dp,
+    )
+
+    Spacer(Modifier.height(32.dp))
+    Text("Menyimpan...", style = MaterialTheme.typography.titleMedium)
+
+    Spacer(Modifier.height(8.dp))
+    Text(
+        "Memasukkan agenda ke kalender HP",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** Tampilan draf: judul, tanggal, dan jam hasil ekstraksi Gemini (Fitur 2). */
+@Composable
+private fun DraftContent(
+    reminder: Reminder,
+    onSave: () -> Unit,
+) = Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    modifier = Modifier.fillMaxWidth(),
+) {
+    Text("Agenda Terdeteksi", style = MaterialTheme.typography.titleMedium)
+
+    Spacer(Modifier.height(16.dp))
+
+    // Kartu bergaya sama dengan HintCard di VoiceCaptureScreen.
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+        Text(
+            reminder.title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            // --- HEADER ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Reminder Suara AI",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    color = Color.Black
-                )
-            }
+            Text(
+                "📅 ${reminder.date}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "⏰ ${reminder.time}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 
-            // --- KONTEN UTAMA ---
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    isLoading -> {
-                        // Loading State (Proses Menyimpan)
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(BorderStroke(2.dp, Color.Black), RoundedCornerShape(12.dp))
-                                .padding(32.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                color = Color.Black,
-                                strokeWidth = 3.dp,
-                                modifier = Modifier.size(40.dp)
-                            )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Text(
-                                text = "Menyimpan ke kalender...",
-                                fontSize = 16.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = Color.Black,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
+    Spacer(Modifier.height(32.dp))
 
-                    isSuccess -> {
-                        // Status Berhasil Simpan
-                        OutlinedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(2.dp, Color.Black),
-                            colors = CardDefaults.outlinedCardColors(containerColor = Color.White)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "[✓]",
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.Black
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "Acara berhasil disimpan!",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
+    Button(
+        onClick = onSave,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+    ) {
+        Text("Simpan ke Kalender")
+    }
+}
 
-                                reminder?.let {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(Color(0xFFF5F5F5), RoundedCornerShape(8.dp))
-                                            .border(BorderStroke(1.dp, Color.LightGray), RoundedCornerShape(8.dp))
-                                            .padding(12.dp)
-                                    ) {
-                                        Column {
-                                            Text(
-                                                text = it.title,
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.Black
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "${it.date} • ${it.time}",
-                                                fontSize = 14.sp,
-                                                fontFamily = FontFamily.Monospace,
-                                                color = Color.DarkGray
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+/** Tampilan berhasil: konfirmasi bahwa acara sudah masuk ke kalender perangkat (FR-11). */
+@Composable
+private fun SuccessContent(
+    reminder: Reminder?,
+    onDone: () -> Unit,
+) = Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    modifier = Modifier.fillMaxWidth(),
+) {
+    Text("✓ Acara Berhasil Disimpan!", style = MaterialTheme.typography.titleMedium)
 
-                    errorMessage != null -> {
-                        // Status Gagal / Error State (Alur Alternatif D)
-                        OutlinedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(2.dp, Color.Black),
-                            colors = CardDefaults.outlinedCardColors(containerColor = Color.White)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "!",
-                                    fontSize = 36.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.Black
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "BELUM BERHASIL DISIMPAN",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.Black,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = errorMessage,
-                                    fontSize = 13.sp,
-                                    color = Color.DarkGray,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
+    if (reminder != null) {
+        Spacer(Modifier.height(16.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                reminder.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "${reminder.date} • ${reminder.time}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            )
+        }
+    }
 
-                    reminder != null -> {
-                        // Tampilan Draf Hasil Gemini AI (Sesuai Layout Bee)
-                        OutlinedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(2.dp, Color.Black),
-                            colors = CardDefaults.outlinedCardColors(containerColor = Color.White)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp)
-                            ) {
-                                Text(
-                                    text = "Rencana Terdeteksi:",
-                                    fontSize = 12.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.Gray
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = reminder.title,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
+    Spacer(Modifier.height(32.dp))
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "📅 ${reminder.date}",
-                                        fontSize = 14.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = Color.Black
-                                    )
-                                    Text(
-                                        text = "⏰ ${reminder.time}",
-                                        fontSize = 14.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = Color.Black
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    Button(
+        onClick = onDone,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+    ) {
+        Text("Selesai")
+    }
+}
 
-            // --- TOMBOL AKSI UTAMA ---
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                when {
-                    isSuccess -> {
-                        Button(
-                            onClick = onDoneClicked,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                        ) {
-                            Text(
-                                text = "SELESAI",
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = Color.White
-                            )
-                        }
-                    }
+/**
+ * Tampilan error: mengakomodasi UC-01 Alur Alternatif D (izin kalender ditolak atau
+ * gagal simpan). Tombol "Buka Pengaturan" hanya muncul bila penyebabnya izin, karena
+ * "Coba Lagi" saja tidak membantu kalau izin sudah ditolak permanen.
+ */
+@Composable
+private fun ErrorContent(
+    message: String,
+    showSettingsButton: Boolean,
+    onRetry: () -> Unit,
+    onOpenSettings: () -> Unit,
+) = Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    modifier = Modifier.fillMaxWidth(),
+) {
+    Text(
+        "Gagal Menyimpan",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.error,
+    )
 
-                    errorMessage != null -> {
-                        Button(
-                            onClick = onRetryClicked,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                        ) {
-                            Text(
-                                text = "COBA LAGI",
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = Color.White
-                            )
-                        }
-                    }
+    Spacer(Modifier.height(16.dp))
 
-                    else -> {
-                        Button(
-                            onClick = onSaveClicked,
-                            enabled = !isLoading && reminder != null,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Black,
-                                disabledContainerColor = Color.Gray
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                        ) {
-                            Text(
-                                text = "SIMPAN KE KALENDER",
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-            }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(16.dp))
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            textAlign = TextAlign.Center,
+        )
+    }
+
+    Spacer(Modifier.height(24.dp))
+
+    Button(
+        onClick = onRetry,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+    ) {
+        Text("Coba Lagi")
+    }
+
+    if (showSettingsButton) {
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+        ) {
+            Text("Buka Pengaturan")
         }
     }
 }
 
-
-
-@Preview(showBackground = true, name = "1. Tampilan Draf Hasil Gemini")
+@Preview(name = "Draft Hasil Gemini")
 @Composable
-fun ReminderResultScreenPreview() {
+private fun DraftPreview() = CalenVoiceTheme {
     ReminderResultScreen(
-        reminder = Reminder(
-            title = "Meeting Proyek CalenVoice",
-            date = "2026-10-09",
-            time = "15:00"
-        ),
-        isLoading = false,
-        errorMessage = null,
-        isSuccess = false,
-        onSaveClicked = {},
-        onRetryClicked = {},
-        onDoneClicked = {}
+        reminder = Reminder("Meeting Proyek CalenVoice", "2026-10-09", "15:00"),
+        onSave = {},
+        onRetry = {},
+        onDone = {},
     )
 }
 
-@Preview(showBackground = true, name = "2. Tampilan Loading Simpan")
+@Preview(name = "Menyimpan")
 @Composable
-fun ReminderResultScreenLoadingPreview() {
+private fun SavingPreview() = CalenVoiceTheme {
     ReminderResultScreen(
-        reminder = Reminder(
-            title = "Meeting Proyek CalenVoice",
-            date = "2026-10-09",
-            time = "15:00"
-        ),
-        isLoading = true,
-        errorMessage = null,
-        isSuccess = false,
-        onSaveClicked = {},
-        onRetryClicked = {},
-        onDoneClicked = {}
+        reminder = Reminder("Meeting Proyek CalenVoice", "2026-10-09", "15:00"),
+        isSaving = true,
+        onSave = {},
+        onRetry = {},
+        onDone = {},
     )
 }
 
-@Preview(showBackground = true, name = "3. Tampilan Berhasil Simpan")
+@Preview(name = "Berhasil Simpan")
 @Composable
-fun ReminderResultScreenSuccessPreview() {
+private fun SuccessPreview() = CalenVoiceTheme {
     ReminderResultScreen(
-        reminder = Reminder(
-            title = "Meeting Proyek CalenVoice",
-            date = "2026-10-09",
-            time = "15:00"
-        ),
-        isLoading = false,
-        errorMessage = null,
+        reminder = Reminder("Meeting Proyek CalenVoice", "2026-10-09", "15:00"),
         isSuccess = true,
-        onSaveClicked = {},
-        onRetryClicked = {},
-        onDoneClicked = {}
+        onSave = {},
+        onRetry = {},
+        onDone = {},
     )
 }
 
-@Preview(showBackground = true, name = "4. Tampilan Gagal Simpan")
+@Preview(name = "Gagal: Izin Kalender")
 @Composable
-fun ReminderResultScreenErrorPreview() {
+private fun PermissionErrorPreview() = CalenVoiceTheme {
     ReminderResultScreen(
-        reminder = null,
-        isLoading = false,
-        errorMessage = "Izin akses kalender belum diberikan di pengaturan perangkat.",
-        isSuccess = false,
-        onSaveClicked = {},
-        onRetryClicked = {},
-        onDoneClicked = {}
+        reminder = Reminder("Meeting Proyek CalenVoice", "2026-10-09", "15:00"),
+        errorMessage = "Event tidak bisa disimpan karena izin kalender belum diberikan.",
+        isPermissionError = true,
+        onSave = {},
+        onRetry = {},
+        onDone = {},
     )
 }
