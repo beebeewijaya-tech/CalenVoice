@@ -6,14 +6,21 @@ import com.bee.calenvoice.data.CalendarPermissionException
 import com.bee.calenvoice.data.CalendarRepository
 import com.bee.calenvoice.data.InferenceRepository
 import com.bee.calenvoice.data.InvalidReminderException
+import com.bee.calenvoice.data.NoSpeechException
 import com.bee.calenvoice.data.NoWritableCalendarException
+import com.bee.calenvoice.data.SpeechNetworkException
+import com.bee.calenvoice.data.SpeechPermissionException
 import com.bee.calenvoice.data.SpeechRepository
+import com.bee.calenvoice.data.SpeechUnavailableException
 import com.bee.calenvoice.model.RecordingState
 import com.bee.calenvoice.model.Reminder
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** State yang turun dari ViewModel ke View sebagai StateFlow (MVVM, Gambar 2.2). */
@@ -28,7 +35,9 @@ data class VoiceReminderUiState(
     val isSaving: Boolean = false,
     /** Fitur 3: sinyal ke View supaya memunculkan dialog izin kalender. Di-reset setelah dipakai. */
     val needsCalendarPermission: Boolean = false,
-    /** Fitur 3: true jika error karena izin, supaya View menampilkan tombol ke Pengaturan. */
+    /** Fitur 1: sinyal ke View supaya memunculkan dialog izin mikrofon. Di-reset setelah dipakai. */
+    val needsMicPermission: Boolean = false,
+    /** true jika error karena izin, supaya View menampilkan tombol ke Pengaturan. */
     val errorIsPermission: Boolean = false,
 ) {
     companion object {
@@ -49,29 +58,135 @@ class VoiceReminderViewModel(
     private val _uiState = MutableStateFlow(VoiceReminderUiState())
     val uiState: StateFlow<VoiceReminderUiState> = _uiState.asStateFlow()
 
-    /** Fitur 1 → validasi regex → Fitur 2 (Gambar 4.1 dan 4.2). */
+    /** Sesi rekam + inference yang sedang berjalan, dipegang supaya Batal bisa menghentikannya. */
+    private var captureJob: Job? = null
+
+    // ------------------------------------------------------------------
+    // Fitur 1 dan 2: rekam, validasi, lalu serahkan ke Gemini (Gambar 4.1 dan 4.2)
+    // ------------------------------------------------------------------
+
+    /**
+     * Satu alur utuh dari tombol rekam sampai Reminder siap disimpan.
+     *
+     * Urutannya persis Gambar 4.1 dan 4.2, dan semua percabangannya ada di sini karena
+     * ViewModel yang memegang keputusan alur (Tabel 2.2):
+     *
+     * 1. Izin mikrofon belum ada, minta View menampilkan dialog dulu (Alur Alternatif B).
+     * 2. Rekam sampai pengguna diam atau 60 detik terlewati (FR-02, FR-03, FR-04).
+     * 3. Teks kosong, berhenti dengan pesan (FR-05).
+     * 4. Tidak ada kata "jam" atau "pukul", minta ucap ulang (FR-06, Alur Alternatif A).
+     * 5. Lolos, status Processing lalu teks diserahkan ke Gemini (FR-08, FR-09).
+     * 6. Gemini gagal, tawarkan Coba Lagi (Alur Alternatif C).
+     */
     fun onRecordClicked() {
-        _uiState.update {
-            it.copy(
-                recording = RecordingState.RECORDING,
-                elapsedSeconds = 0,
-                transcriptText = "",
-                reminder = null,
-                savedEventId = null,
-                error = null
-            )
+        if (captureJob?.isActive == true) return // cegah double tap
+
+        if (!speech.hasMicPermission()) {
+            _uiState.update {
+                it.copy(needsMicPermission = true, error = null, errorIsPermission = false)
+            }
+            return
+        }
+
+        captureJob = viewModelScope.launch {
+            _uiState.value = VoiceReminderUiState(recording = RecordingState.RECORDING)
+            val ticker = launch { tickElapsedSeconds() }
+
+            val transcript = try {
+                speech.listen(VoiceReminderUiState.MAX_SECONDS)
+            } finally {
+                ticker.cancel()
+            }
+
+            transcript
+                .onFailure { e -> fail(e) }
+                .onSuccess { result ->
+                    when {
+                        // FR-05: tidak ada yang terdengar.
+                        result.isEmpty() -> fail(NoSpeechException())
+
+                        // FR-06: ucapan harus menyebut jam atau pukul (Alur Alternatif A).
+                        !result.hasTimeKeyword() -> _uiState.update {
+                            it.copy(
+                                recording = RecordingState.ERROR,
+                                transcriptText = result.text,
+                                error = "Ucapan harus menyebut \"jam\" atau \"pukul\". Coba rekam ulang.",
+                            )
+                        }
+
+                        else -> extract(result.text)
+                    }
+                }
         }
     }
 
-    /** Berhenti lebih awal; auto-stop di detik 60 juga lewat sini. */
-    fun onStopClicked() {
-        // Mengubah status perekaman ke IDLE atau memanggil fungsi penghentian perekaman
-        _uiState.update { it.copy(recording = RecordingState.IDLE) }
+    /** Fitur 2: teks yang sudah lolos validasi diserahkan ke Gemini. */
+    private suspend fun extract(text: String) {
+        _uiState.update {
+            it.copy(recording = RecordingState.PROCESSING, transcriptText = text, error = null)
+        }
+
+        inference.extract(text, System.currentTimeMillis())
+            .onSuccess { reminder ->
+                // Reminder terisi, sehingga VoiceReminderRoute otomatis berpindah ke layar hasil.
+                _uiState.update { it.copy(recording = RecordingState.DONE, reminder = reminder) }
+            }
+            .onFailure { e -> fail(e) }
     }
 
-    /** Batal: kembali ke IDLE tanpa memanggil Gemini. */
+    /**
+     * Menaikkan penghitung detik selama merekam, supaya UI bisa menampilkan 00:07 dan seterusnya.
+     * Tidak perlu memeriksa isActive sendiri: delay() sudah melempar saat coroutine dibatalkan.
+     */
+    private suspend fun tickElapsedSeconds() {
+        while (true) {
+            delay(1_000)
+            _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+        }
+    }
+
+    /** Berhenti lebih awal. Hasil sementara tetap diproses, jadi bukan pembatalan. */
+    fun onStopClicked() {
+        speech.stopListening()
+    }
+
+    /** Batal: hentikan sesi dan kembali ke kondisi awal tanpa memanggil Gemini. */
     fun onCancelClicked() {
-        _uiState.update { VoiceReminderUiState() }
+        captureJob?.cancel()
+        captureJob = null
+        speech.stopListening()
+        _uiState.value = VoiceReminderUiState()
+    }
+
+    /** Dipanggil View tepat setelah dialog izin mikrofon ditampilkan. */
+    fun onMicPermissionRequestHandled() {
+        _uiState.update { it.copy(needsMicPermission = false) }
+    }
+
+    /** Hasil dialog izin mikrofon. Kalau diizinkan, langsung mulai merekam. */
+    fun onMicPermissionResult(granted: Boolean) {
+        if (granted) {
+            onRecordClicked()
+        } else {
+            _uiState.update {
+                it.copy(
+                    recording = RecordingState.ERROR,
+                    error = SpeechPermissionException().toUserMessage(),
+                    errorIsPermission = true,
+                )
+            }
+        }
+    }
+
+    /** Memindahkan state ke ERROR dengan pesan yang sudah diterjemahkan. */
+    private fun fail(e: Throwable) {
+        _uiState.update {
+            it.copy(
+                recording = RecordingState.ERROR,
+                error = e.toUserMessage(),
+                errorIsPermission = e is SpeechPermissionException,
+            )
+        }
     }
 
     // ------------------------------------------------------------------
@@ -137,24 +252,36 @@ class VoiceReminderViewModel(
 
     /** Tombol "Selesai" di layar sukses: kembali ke kondisi awal untuk reminder berikutnya. */
     fun onDoneClicked() {
-        _uiState.update { VoiceReminderUiState() }
+        _uiState.value = VoiceReminderUiState()
     }
 
-    /** Milik Bee: reset total ke kondisi awal (reminder ikut hilang). */
+    /** Reset total ke kondisi awal (reminder ikut hilang). */
     fun onRetry() {
-        _uiState.update { VoiceReminderUiState() }
+        _uiState.value = VoiceReminderUiState()
     }
 
-    /** Menerjemahkan exception dari lapisan data menjadi pesan yang bisa dibaca pengguna (FR-12). */
+    /** Menerjemahkan exception dari lapisan data menjadi pesan yang bisa dibaca pengguna. */
     private fun Throwable.toUserMessage(): String = when (this) {
+        // Fitur 1
+        is SpeechPermissionException ->
+            "Izin mikrofon belum diberikan. Aktifkan dulu lewat Pengaturan."
+        is SpeechUnavailableException ->
+            "Perangkat ini belum punya layanan ubah suara ke teks. Coba di HP asli, bukan emulator."
+        is NoSpeechException ->
+            "Suara tidak terdengar. Coba rekam ulang dan bicara lebih dekat ke mikrofon."
+        is SpeechNetworkException ->
+            "Layanan ubah suara ke teks butuh internet dan sedang tidak bisa dihubungi. " +
+                    "Periksa koneksi lalu coba lagi."
+
+        // Fitur 3
         is CalendarPermissionException ->
             "Event tidak bisa disimpan karena izin kalender belum diberikan."
         is NoWritableCalendarException ->
             "Tidak ada kalender di HP ini. Tambahkan akun Google atau kalender dulu, lalu coba lagi."
         is InvalidReminderException ->
             "Tanggal atau jam hasil rekaman tidak valid. Coba rekam ulang."
-        else ->
-            "Event tidak bisa disimpan. Coba lagi sebentar."
-    }
 
+        else ->
+            "Terjadi kesalahan. Coba lagi sebentar."
+    }
 }
