@@ -3,6 +3,7 @@ package com.bee.calenvoice.data
 import com.bee.calenvoice.BuildConfig
 import com.bee.calenvoice.model.Reminder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
@@ -47,7 +48,41 @@ class NoInternetException : Exception("Tidak bisa menghubungi Gemini")
 class GeminiFormatException(message: String) : Exception(message)
 
 /** Gemini menolak permintaan, misalnya kunci salah atau kuota habis. */
-class GeminiException(message: String) : Exception(message)
+open class GeminiException(message: String) : Exception(message)
+
+/**
+ * Gemini sedang sibuk atau bermasalah (HTTP 429 dan 5xx). Dibedakan karena sifatnya
+ * sementara: permintaan yang sama bisa berhasil beberapa detik kemudian, jadi layak
+ * diulang alih-alih langsung dinyatakan gagal.
+ */
+class GeminiBusyException(message: String) : GeminiException(message)
+
+/**
+ * Menjalankan [blok], mengulanginya selama ia melempar [GeminiBusyException].
+ *
+ * Sengaja dipisah dari urusan jaringan supaya perilakunya bisa diuji tanpa server:
+ * jumlah percobaan, jeda yang menaik, dan exception terakhir yang dilempar kalau
+ * semua percobaan habis.
+ *
+ * @param maksPercobaan total percobaan, termasuk yang pertama.
+ * @param jedaMs jeda dasar; percobaan ke-n menunggu jedaMs * n.
+ */
+internal suspend fun <T> ulangiSaatSibuk(
+    maksPercobaan: Int,
+    jedaMs: Long,
+    blok: () -> T,
+): T {
+    var terakhir: GeminiBusyException? = null
+    repeat(maksPercobaan) { ke ->
+        try {
+            return blok()
+        } catch (e: GeminiBusyException) {
+            terakhir = e
+            if (ke < maksPercobaan - 1) delay(jedaMs * (ke + 1))
+        }
+    }
+    throw terakhir ?: IllegalStateException("maksPercobaan harus minimal 1")
+}
 
 /**
  * Implementasi InferenceRepository memakai REST API Gemini lewat HttpURLConnection.
@@ -139,7 +174,17 @@ class GeminiInferenceRepository(
             .toString()
     }
 
-    private fun post(body: String): String {
+    /**
+     * Mengirim permintaan, mengulang bila Gemini sedang sibuk.
+     *
+     * Hanya kegagalan sementara (429 dan 5xx) yang diulang. Kunci salah, model tidak
+     * ditemukan, dan kesalahan bentuk permintaan tidak akan membaik dengan diulang,
+     * jadi langsung dilempar supaya pengguna cepat tahu.
+     */
+    private suspend fun post(body: String): String =
+        ulangiSaatSibuk(MAX_PERCOBAAN, JEDA_ULANG_MS) { postOnce(body) }
+
+    private fun postOnce(body: String): String {
         val url = URL("$ENDPOINT/$model:generateContent")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -155,9 +200,12 @@ class GeminiInferenceRepository(
         return try {
             conn.outputStream.use { it.write(body.toByteArray()) }
 
-            if (conn.responseCode !in 200..299) {
+            val code = conn.responseCode
+            if (code !in 200..299) {
                 val detail = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                throw GeminiException(geminiErrorMessage(conn.responseCode, detail))
+                val pesan = geminiErrorMessage(code, detail)
+                throw if (code == 429 || code in 500..599) GeminiBusyException(pesan)
+                else GeminiException(pesan)
             }
             conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
@@ -205,6 +253,9 @@ class GeminiInferenceRepository(
         }.getOrNull()
         return when (code) {
             400, 403 -> "Kunci Gemini ditolak: ${fromServer ?: "periksa GEMINI_API_KEY"}"
+            401 -> "Kunci Gemini tidak berlaku. Pakai API key dari aistudio.google.com (diawali AIza)."
+            404 -> fromServer
+                ?: "Model \"$model\" tidak tersedia untuk kunci ini, atau kuota kunci sudah habis."
             429 -> "Kuota Gemini habis, coba lagi nanti"
             in 500..599 -> "Server Gemini sedang bermasalah"
             else -> fromServer ?: "Gemini menolak permintaan (kode $code)"
@@ -222,7 +273,7 @@ class GeminiInferenceRepository(
          * selalu menunjuk ke flash yang masih hidup, jadi aplikasi tidak mati sendiri
          * beberapa bulan setelah dikumpulkan.
          */
-        const val DEFAULT_MODEL = "gemini-flash-latest"
+        const val DEFAULT_MODEL = "gemini-2.5-flash"
 
         /**
          * Longgar karena flash terbaru berpikir dulu sebelum menjawab: satu panggilan uji
@@ -238,6 +289,10 @@ class GeminiInferenceRepository(
          * terlihat begitu dijalankan dengan kunci yang masih berlaku.
          */
         const val TIMEOUT_MS = 120_000
+
+        /** Tiga percobaan dengan jeda 1 lalu 2 detik; cukup melewati lonjakan beban sesaat. */
+        const val MAX_PERCOBAAN = 3
+        const val JEDA_ULANG_MS = 1_000L
 
         val DATE_PATTERN = Regex("""\d{4}-\d{2}-\d{2}""")
         val TIME_PATTERN = Regex("""\d{2}:\d{2}""")
