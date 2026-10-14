@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,7 +63,9 @@ import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 fun VoiceCaptureScreen(
     state: VoiceReminderUiState,
     onRecord: () -> Unit,
+    onStop: () -> Unit,
     onCancel: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) = Column(
     modifier
@@ -84,7 +88,15 @@ fun VoiceCaptureScreen(
     Spacer(Modifier.weight(1f))
 
     when (state.recording) {
+        RecordingState.RECORDING -> RecordingContent(state.elapsedSeconds, onStop, onCancel)
         RecordingState.PROCESSING -> ProcessingContent(state.transcriptText, onCancel)
+        RecordingState.ERROR -> ErrorContent(
+            message = state.error.orEmpty(),
+            transcriptText = state.transcriptText,
+            isPermissionError = state.errorIsPermission,
+            onRecord = onRecord,
+            onOpenSettings = onOpenSettings,
+        )
         else -> IdleContent(onRecord)
     }
 
@@ -165,6 +177,110 @@ private fun ProcessingContent(
 
     Spacer(Modifier.height(16.dp))
     TextButton(onClick = onCancel) { Text("Batal") }
+}
+
+/**
+ * Tampilan 3: sedang merekam (FR-02, FR-03).
+ *
+ * Penghitung detik naik tiap detik dari ViewModel. Batas 60 detik ditampilkan terang-terangan
+ * supaya pengguna tahu rekaman akan berhenti sendiri, dan tombol stop tetap disediakan
+ * untuk mengakhiri lebih cepat.
+ *
+ * @param elapsedSeconds lama merekam, dipakai untuk teks 00:07.
+ * @param onStop dipanggil saat pengguna ingin menyudahi rekaman; hasilnya tetap diproses.
+ * @param onCancel membatalkan seluruh sesi dan kembali ke kondisi awal.
+ */
+@Composable
+private fun RecordingContent(
+    elapsedSeconds: Int,
+    onStop: () -> Unit,
+    onCancel: () -> Unit,
+) = Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+) {
+    Surface(
+        onClick = onStop,
+        modifier = Modifier
+            .size(160.dp)
+            .semantics { contentDescription = "Berhenti merekam" },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.error,
+        contentColor = MaterialTheme.colorScheme.onError,
+    ) {
+        MicGlyph(
+            MaterialTheme.colorScheme.onError,
+            Modifier.padding(52.dp),
+        )
+    }
+
+    Spacer(Modifier.height(32.dp))
+    Text(
+        "%02d:%02d".format(elapsedSeconds / 60, elapsedSeconds % 60),
+        style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.primary,
+    )
+
+    Spacer(Modifier.height(8.dp))
+    Text("Mendengarkan, silakan bicara", style = MaterialTheme.typography.titleMedium)
+
+    Spacer(Modifier.height(32.dp))
+    HintCard("Berhenti sendiri setelah", "${VoiceReminderUiState.MAX_SECONDS} detik")
+
+    Spacer(Modifier.height(16.dp))
+    TextButton(onClick = onCancel) { Text("Batal") }
+}
+
+/**
+ * Tampilan 4: salah satu langkah gagal (FR-05, FR-06, FR-07, Alur Alternatif A sampai C).
+ *
+ * Satu tampilan melayani semua kegagalan Fitur 1 dan 2, karena jalan keluarnya sama:
+ * rekam ulang. Kekecualiannya izin mikrofon yang ditolak permanen, yang hanya bisa
+ * diperbaiki lewat Pengaturan, sehingga tombol tambahan muncul khusus untuk kasus itu.
+ *
+ * Transkrip tetap dikutip kalau ada, supaya pengguna tahu apa yang sebenarnya terdengar
+ * dan tidak menebak-nebak kenapa ucapannya ditolak.
+ */
+@Composable
+private fun ErrorContent(
+    message: String,
+    transcriptText: String,
+    isPermissionError: Boolean,
+    onRecord: () -> Unit,
+    onOpenSettings: () -> Unit,
+) = Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+) {
+    Text(
+        "!",
+        style = MaterialTheme.typography.displaySmall,
+        color = MaterialTheme.colorScheme.error,
+    )
+
+    Spacer(Modifier.height(16.dp))
+    Text("Belum berhasil", style = MaterialTheme.typography.titleMedium)
+
+    Spacer(Modifier.height(8.dp))
+    Text(
+        message,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
+
+    if (transcriptText.isNotBlank()) {
+        Spacer(Modifier.height(24.dp))
+        HintCard("Terdengar", "\u201C$transcriptText\u201D")
+    }
+
+    Spacer(Modifier.height(32.dp))
+    Button(onClick = onRecord, modifier = Modifier.fillMaxWidth()) { Text("Rekam ulang") }
+
+    if (isPermissionError) {
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+            Text("Buka Pengaturan")
+        }
+    }
 }
 
 /**
@@ -257,7 +373,42 @@ private fun MicGlyph(color: Color, modifier: Modifier = Modifier) = Canvas(modif
 @Preview(name = "IDLE")
 @Composable
 private fun IdlePreview() = CalenVoiceTheme {
-    VoiceCaptureScreen(VoiceReminderUiState(), onRecord = {}, onCancel = {})
+    VoiceCaptureScreen(VoiceReminderUiState(), {}, {}, {}, {})
+}
+
+@Preview(name = "RECORDING")
+@Composable
+private fun RecordingPreview() = CalenVoiceTheme {
+    VoiceCaptureScreen(
+        VoiceReminderUiState(recording = RecordingState.RECORDING, elapsedSeconds = 7),
+        {}, {}, {}, {},
+    )
+}
+
+@Preview(name = "ERROR tanpa kata waktu")
+@Composable
+private fun ErrorPreview() = CalenVoiceTheme {
+    VoiceCaptureScreen(
+        VoiceReminderUiState(
+            recording = RecordingState.ERROR,
+            transcriptText = "ingetin meeting besok",
+            error = "Ucapan harus menyebut \"jam\" atau \"pukul\". Coba rekam ulang.",
+        ),
+        {}, {}, {}, {},
+    )
+}
+
+@Preview(name = "ERROR izin mikrofon")
+@Composable
+private fun ErrorPermissionPreview() = CalenVoiceTheme {
+    VoiceCaptureScreen(
+        VoiceReminderUiState(
+            recording = RecordingState.ERROR,
+            error = "Izin mikrofon belum diberikan. Aktifkan dulu lewat Pengaturan.",
+            errorIsPermission = true,
+        ),
+        {}, {}, {}, {},
+    )
 }
 
 @Preview(name = "PROCESSING")
@@ -269,6 +420,8 @@ private fun ProcessingPreview() = CalenVoiceTheme {
             transcriptText = "ingetin meeting jam 3 besok",
         ),
         onRecord = {},
+        onStop = {},
         onCancel = {},
+        onOpenSettings = {},
     )
 }

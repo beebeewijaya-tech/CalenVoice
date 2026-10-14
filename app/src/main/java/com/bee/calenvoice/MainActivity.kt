@@ -16,8 +16,8 @@ import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 
 /**
  * Titik masuk aplikasi. Di sinilah tiga repository (Lapisan 2) dirakit lalu diberikan
- * ke ViewModel (Lapisan 1). DeviceCalendarRepository memakai applicationContext supaya
- * tidak menahan Activity di memori.
+ * ke ViewModel (Lapisan 1). AndroidSpeechRepository dan DeviceCalendarRepository sama-sama
+ * memakai applicationContext supaya tidak menahan Activity di memori.
  */
 class MainActivity : ComponentActivity() {
 
@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 VoiceReminderViewModel(
-                    speech = AndroidSpeechRepository(),
+                    speech = AndroidSpeechRepository(applicationContext),
                     inference = GeminiInferenceRepository(),
                     calendar = DeviceCalendarRepository(applicationContext),
                 )
