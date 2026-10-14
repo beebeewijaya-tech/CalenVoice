@@ -17,6 +17,10 @@ local.properties
 
 .hallmark/
 
+# Dokumentasi dan bukti pengujian. Tidak ikut dilacak git karena berisi
+# gambar besar dan berkas hasil cetak yang bisa dibuat ulang.
+docs/
+
 # Created by https://www.gitignore.io/api/java,linux,macos,windows,android,intellij,androidstudio
 # Edit at https://www.gitignore.io/?templates=java,linux,macos,windows,android,intellij,androidstudio
 
