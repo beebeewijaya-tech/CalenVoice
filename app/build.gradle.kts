@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// Kunci Gemini dibaca dari local.properties, bukan ditulis di kode.
+// local.properties tidak ikut di-commit maupun masuk ZIP, jadi kunci tidak pernah bocor.
+// Kalau belum diisi, nilainya string kosong dan GeminiInferenceRepository akan
+// mengembalikan MissingApiKeyException dengan pesan yang jelas.
+val geminiApiKey: String = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}.getProperty("GEMINI_API_KEY") ?: ""
 
 android {
     namespace = "com.bee.calenvoice"
@@ -17,6 +27,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
@@ -32,6 +44,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

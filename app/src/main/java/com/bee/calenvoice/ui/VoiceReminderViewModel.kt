@@ -4,8 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bee.calenvoice.data.CalendarPermissionException
 import com.bee.calenvoice.data.CalendarRepository
+import com.bee.calenvoice.data.GeminiException
+import com.bee.calenvoice.data.GeminiFormatException
 import com.bee.calenvoice.data.InferenceRepository
 import com.bee.calenvoice.data.InvalidReminderException
+import com.bee.calenvoice.data.MissingApiKeyException
+import com.bee.calenvoice.data.NoInternetException
 import com.bee.calenvoice.data.NoSpeechException
 import com.bee.calenvoice.data.NoWritableCalendarException
 import com.bee.calenvoice.data.SpeechNetworkException
@@ -272,6 +276,16 @@ class VoiceReminderViewModel(
         is SpeechNetworkException ->
             "Layanan ubah suara ke teks butuh internet dan sedang tidak bisa dihubungi. " +
                     "Periksa koneksi lalu coba lagi."
+
+        // Fitur 2
+        is MissingApiKeyException ->
+            "Kunci Gemini belum diisi. Tambahkan GEMINI_API_KEY di local.properties."
+        is NoInternetException ->
+            "Gagal menghubungi Gemini. Periksa koneksi internet lalu coba lagi."
+        is GeminiFormatException ->
+            "Hasil dari Gemini tidak terbaca ($message). Coba rekam ulang."
+        is GeminiException ->
+            message ?: "Gemini menolak permintaan."
 
         // Fitur 3
         is CalendarPermissionException ->
