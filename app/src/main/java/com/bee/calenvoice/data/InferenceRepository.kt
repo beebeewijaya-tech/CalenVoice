@@ -266,14 +266,18 @@ class GeminiInferenceRepository(
         const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
 
         /**
-         * Sengaja memakai alias "-latest", bukan nomor versi.
+         * Model yang dipakai. Gampang diganti lewat parameter konstruktor kalau perlu.
          *
-         * Model bernomor dipensiunkan: gemini-2.0-flash yang semula dipakai di sini sudah
-         * ditolak server dengan pesan "no longer available". Alias ini dijaga Google supaya
-         * selalu menunjuk ke flash yang masih hidup, jadi aplikasi tidak mati sendiri
-         * beberapa bulan setelah dikumpulkan.
+         * Riwayat pemilihannya, supaya tidak diulang dari nol:
+         * - gemini-2.0-flash ditolak server, "no longer available", dan server sendiri
+         *   menyarankan gemini-3.8-flash sebagai penggantinya.
+         * - gemini-2.5-flash dan gemini-3.5-flash tidak pernah menjawab untuk kunci uji.
+         * - gemini-flash-latest sempat berhasil sekali, tetapi sering dijawab 503.
+         *
+         * Alternatif kalau model ini sedang padat: "gemini-flash-latest" (alias yang
+         * dijaga Google) atau "gemini-flash-lite-latest" (lebih ringan, lebih cepat).
          */
-        const val DEFAULT_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_MODEL = "gemini-3.8-flash"
 
         /**
          * Longgar karena flash terbaru berpikir dulu sebelum menjawab: satu panggilan uji
