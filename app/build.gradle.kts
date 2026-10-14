@@ -60,6 +60,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // android.jar hanya menyediakan stub org.json untuk unit test JVM,
+    // jadi implementasi aslinya perlu ditambahkan khusus untuk test.
+    testImplementation(libs.org.json)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

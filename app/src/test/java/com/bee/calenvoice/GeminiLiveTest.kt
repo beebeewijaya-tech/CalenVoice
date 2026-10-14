@@ -27,16 +27,13 @@ class GeminiLiveTest {
     fun `Gemini mengubah kalimat Indonesia menjadi judul tanggal dan jam`() = runBlocking {
         val key = BuildConfig.GEMINI_API_KEY
 
-        // Dilewati kalau kunci belum ada. "AQ." adalah ephemeral token untuk Live API,
-        // bukan API key untuk generateContent, jadi ikut dilewati supaya kegagalannya
-        // tidak terbaca seolah kode yang salah.
+        // Dilewati hanya kalau kuncinya belum diisi sama sekali. Jangan menambah syarat
+        // soal bentuk kunci: token "AQ." sempat dikira tidak berlaku, padahal berfungsi,
+        // hanya batas lajunya sangat ketat sehingga permintaan beruntun membuatnya
+        // dijawab 404 berbadan kosong.
         assumeTrue(
             "GEMINI_API_KEY belum diisi di local.properties, test dilewati",
             key.isNotBlank(),
-        )
-        assumeTrue(
-            "GEMINI_API_KEY bukan API key (harus diawali \"AIza\", ambil di aistudio.google.com), test dilewati",
-            key.startsWith("AIza"),
         )
 
         val repo = GeminiInferenceRepository(apiKey = key)
