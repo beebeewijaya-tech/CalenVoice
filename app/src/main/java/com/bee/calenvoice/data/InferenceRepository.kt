@@ -166,10 +166,9 @@ class GeminiInferenceRepository(
                     .put("responseMimeType", "application/json")
                     .put("responseSchema", schema)
                     .put("temperature", 0)
-                    // Mematikan tahap berpikir model. Mengambil tiga field dari satu
-                    // kalimat tidak butuh penalaran bertingkat, sementara biayanya besar:
-                    // satu panggilan uji dengan thinking menyala memakan 75 detik.
-                    .put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+                    // Catatan: thinkingConfig sengaja TIDAK dikirim. Model lite menolaknya
+                    // dengan HTTP 400 "invalid argument", dan memang tidak diperlukan karena
+                    // model ini sudah menjawab sekitar satu detik tanpa tahap berpikir.
             )
             .toString()
     }
@@ -269,30 +268,24 @@ class GeminiInferenceRepository(
          * Model yang dipakai. Gampang diganti lewat parameter konstruktor kalau perlu.
          *
          * Riwayat pemilihannya, supaya tidak diulang dari nol:
-         * - gemini-2.0-flash ditolak server, "no longer available", dan server sendiri
-         *   menyarankan gemini-3.8-flash sebagai penggantinya.
-         * - gemini-2.5-flash dan gemini-3.5-flash tidak pernah menjawab untuk kunci uji.
-         * - gemini-flash-latest sempat berhasil sekali, tetapi sering dijawab 503.
+         * - gemini-2.0-flash ditolak server, "no longer available".
+         * - gemini-3.8-flash berulang kali dijawab 503 high demand.
+         * - gemini-flash-latest sempat berhasil, tetapi makan 75 detik karena berpikir dulu.
+         * - gemini-3.5-flash-lite menjawab benar dalam 1 detik. Dipilih.
          *
-         * Alternatif kalau model ini sedang padat: "gemini-flash-latest" (alias yang
-         * dijaga Google) atau "gemini-flash-lite-latest" (lebih ringan, lebih cepat).
+         * Alternatif kalau model ini bermasalah: "gemini-flash-lite-latest" atau
+         * "gemini-flash-latest". Perhatikan model lite menolak thinkingConfig.
          */
-        const val DEFAULT_MODEL = "gemini-3.8-flash"
+        const val DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
         /**
-         * Longgar karena flash terbaru berpikir dulu sebelum menjawab: satu panggilan uji
-         * dengan prompt yang sama persis memakan 75 detik. Nilai 20 detik yang semula
-         * dipakai di sini akan selalu gagal.
+         * Model lite menjawab sekitar satu detik pada pengujian, jadi 30 detik sudah
+         * sangat longgar sekaligus cukup cepat menyerah ketika jaringan bermasalah.
          *
-         * thinkingBudget sudah disetel 0 di requestBody(), sehingga panggilan seharusnya
-         * jauh lebih cepat dari 75 detik itu. Batas longgar ini tetap dipertahankan sebagai
-         * jaring pengaman: kalau suatu saat setelan itu diabaikan model, permintaan hanya
-         * melambat, bukan gagal. Memendekkan timeout hanya mengubah lambat menjadi gagal.
-         *
-         * GeminiLiveTest mengukur dan melaporkan lamanya, jadi angka sebenarnya akan
-         * terlihat begitu dijalankan dengan kunci yang masih berlaku.
+         * GeminiLiveTest mengukur dan melaporkan lamanya setiap kali dijalankan, jadi
+         * kalau suatu saat melambat, angkanya akan terlihat.
          */
-        const val TIMEOUT_MS = 120_000
+        const val TIMEOUT_MS = 30_000
 
         /** Tiga percobaan dengan jeda 1 lalu 2 detik; cukup melewati lonjakan beban sesaat. */
         const val MAX_PERCOBAAN = 3
