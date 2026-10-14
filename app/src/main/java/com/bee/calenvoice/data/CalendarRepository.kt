@@ -90,7 +90,7 @@ class DeviceCalendarRepository(private val context: Context) : CalendarRepositor
                     calendarId = calendarId,
                     title = reminder.title,
                     dtStart = dtStart,
-                    dtEnd = dtStart + DEFAULT_DURATION_MS,
+                    dtEnd = dtStart,
                     timeZone = TimeZone.getDefault().id,
                 )
 
