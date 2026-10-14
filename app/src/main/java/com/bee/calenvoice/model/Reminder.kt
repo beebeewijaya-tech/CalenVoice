@@ -1,13 +1,13 @@
 package com.bee.calenvoice.model
 
-/** Gambar 3.2/3.3 — hasil ekstraksi Gemini. Hidup di memori saja, tidak ada DB lokal (Bab 5). */
+/** Gambar 3.2/3.3 dan Tabel 5.2: hasil ekstraksi Gemini. Hidup di memori saja, tidak ada DB lokal (Bab 5). */
 data class Reminder(
     val title: String,
     val date: String, // yyyy-MM-dd
     val time: String, // HH:mm
 )
 
-/** Gambar 5.2 — satu baris tabel Events milik Android Calendar Provider. */
+/** Tabel 5.2 dan Gambar 5.1: satu baris tabel Events milik Android Calendar Provider. */
 data class CalendarEvent(
     val eventId: Long? = null,   // Events._ID, diisi provider
     val calendarId: Long,        // Events.CALENDAR_ID

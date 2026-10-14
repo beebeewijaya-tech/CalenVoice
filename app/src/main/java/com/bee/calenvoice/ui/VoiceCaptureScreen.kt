@@ -36,8 +36,26 @@ import com.bee.calenvoice.model.RecordingState
 import com.bee.calenvoice.ui.theme.CalenVoiceTheme
 
 /**
- * Fitur 1 — satu layar, lima tampilan (Gambar L.1). IDLE dan PROCESSING sudah ada;
- * RECORDING, DONE dan ERROR menyusul sebagai cabang [when] di bawah.
+ * Layar Fitur 1 dan 2: perekaman suara sampai teks diproses Gemini (Gambar L.1).
+ *
+ * Murni View dalam pola MVVM (Gambar 2.2): hanya menggambar [state] dan meneruskan
+ * sentuhan pengguna ke ViewModel lewat callback. Tidak ada logika alur di sini, dan
+ * layar ini tidak tahu apa pun soal audio, Gemini, ataupun kalender.
+ *
+ * Satu layar yang berubah mengikuti [RecordingState]:
+ * 1. IDLE: tombol mikrofon dan contoh perintah (sudah ada, lewat [IdleContent]).
+ * 2. PROCESSING: loading dan kutipan transkrip (sudah ada, lewat [ProcessingContent]).
+ * 3. RECORDING, DONE, dan ERROR: belum digambar. Sementara ini ketiganya jatuh ke
+ *    cabang `else` sehingga tampil sama seperti IDLE. Tambahkan sebagai cabang baru
+ *    pada `when` di bawah.
+ *
+ * Perpindahan ke layar hasil (Fitur 3) tidak diurus di sini, melainkan oleh
+ * VoiceReminderRoute: begitu `reminder` pada state terisi, layar ini diganti
+ * ReminderResultScreen.
+ *
+ * @param state kondisi layar yang diamati dari StateFlow milik ViewModel.
+ * @param onRecord dipanggil saat tombol mikrofon ditekan (onRecordClicked di ViewModel).
+ * @param onCancel dipanggil saat tombol "Batal" ditekan (onCancelClicked di ViewModel).
  */
 @Composable
 fun VoiceCaptureScreen(
@@ -53,6 +71,8 @@ fun VoiceCaptureScreen(
         .padding(horizontal = 24.dp, vertical = 16.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
 ) {
+    // Header aplikasi. ReminderResultScreen memakai susunan yang sama supaya
+    // dua layar terasa satu aplikasi.
     Text(
         "Reminder Suara AI",
         Modifier.fillMaxWidth(),
@@ -60,6 +80,7 @@ fun VoiceCaptureScreen(
         color = MaterialTheme.colorScheme.primary,
     )
 
+    // Dua Spacer berbobot sama menaruh konten tepat di tengah layar.
     Spacer(Modifier.weight(1f))
 
     when (state.recording) {
@@ -70,7 +91,13 @@ fun VoiceCaptureScreen(
     Spacer(Modifier.weight(1f))
 }
 
-/** Tampilan 1 — menunggu pengguna menekan mikrofon. */
+/**
+ * Tampilan 1: menunggu pengguna menekan mikrofon.
+ *
+ * Tombol berbentuk lingkaran 160dp dengan deskripsi aksesibilitas "Mulai merekam suara"
+ * supaya terbaca oleh pembaca layar (TalkBack). Di bawahnya ada contoh perintah sebagai
+ * petunjuk bahwa ucapan harus menyebut jam atau pukul (FR-06).
+ */
 @Composable
 private fun IdleContent(onRecord: () -> Unit) = Column(
     horizontalAlignment = Alignment.CenterHorizontally,
@@ -97,7 +124,16 @@ private fun IdleContent(onRecord: () -> Unit) = Column(
     HintCard("Contoh", "“ingetin meeting jam 3 besok”")
 }
 
-/** Tampilan 2 — transkrip sudah ada, Gemini sedang mengekstrak judul/tanggal/jam (Fitur 2). */
+/**
+ * Tampilan 2: transkrip sudah ada dan Gemini sedang mengekstrak judul, tanggal, dan
+ * jam (Fitur 2).
+ *
+ * Kutipan transkrip hanya ditampilkan bila tidak kosong. Tombol "Batal" mengembalikan
+ * layar ke kondisi awal tanpa memanggil Gemini.
+ *
+ * @param transcriptText teks hasil speech-to-text yang dikutip pada kartu "Terdengar".
+ * @param onCancel dipanggil saat tombol "Batal" ditekan.
+ */
 @Composable
 private fun ProcessingContent(
     transcriptText: String,
@@ -131,7 +167,15 @@ private fun ProcessingContent(
     TextButton(onClick = onCancel) { Text("Batal") }
 }
 
-/** Kartu pendukung berlabel — dipakai contoh perintah dan kutipan transkrip. */
+/**
+ * Kartu pendukung berlabel, dipakai untuk contoh perintah dan kutipan transkrip.
+ *
+ * Gaya kartu (warna surfaceVariant, sudut 16dp) dijadikan acuan oleh
+ * ReminderResultScreen agar tampilan kedua layar konsisten.
+ *
+ * @param label judul kecil di atas kartu, misalnya "Contoh" atau "Terdengar".
+ * @param body isi utama kartu, ditampilkan rata tengah.
+ */
 @Composable
 private fun HintCard(label: String, body: String) = Column(
     Modifier
@@ -155,8 +199,14 @@ private fun HintCard(label: String, body: String) = Column(
 }
 
 /**
- * Ikon mikrofon digambar langsung di Canvas — material-icons-extended tidak ditarik
- * hanya demi satu ikon. Semua ukuran relatif terhadap sisi kotak gambar.
+ * Ikon mikrofon yang digambar langsung di Canvas, supaya library
+ * material-icons-extended tidak perlu ditarik hanya demi satu ikon.
+ *
+ * Semua ukuran dihitung relatif terhadap sisi terpendek kotak gambar (`s`), jadi ikon
+ * ikut membesar atau mengecil mengikuti ukuran tombol. Terdiri dari empat bagian:
+ * kapsul mikrofon, dudukan setengah lingkaran, batang, dan kaki.
+ *
+ * @param color warna seluruh bagian ikon.
  */
 @Composable
 private fun MicGlyph(color: Color, modifier: Modifier = Modifier) = Canvas(modifier.fillMaxSize()) {
@@ -164,6 +214,7 @@ private fun MicGlyph(color: Color, modifier: Modifier = Modifier) = Canvas(modif
     val cx = size.width / 2f
     val line = Stroke(width = s * 0.09f, cap = StrokeCap.Round)
 
+    // Kapsul mikrofon.
     val capsuleW = s * 0.34f
     val capsuleH = s * 0.50f
     drawRoundRect(
@@ -172,7 +223,9 @@ private fun MicGlyph(color: Color, modifier: Modifier = Modifier) = Canvas(modif
         size = Size(capsuleW, capsuleH),
         cornerRadius = CornerRadius(capsuleW / 2f),
     )
-    drawArc(                       // dudukan setengah lingkaran
+
+    // Dudukan setengah lingkaran di bawah kapsul.
+    drawArc(
         color = color,
         startAngle = 0f,
         sweepAngle = 180f,
@@ -181,14 +234,18 @@ private fun MicGlyph(color: Color, modifier: Modifier = Modifier) = Canvas(modif
         size = Size(s * 0.64f, s * 0.46f),
         style = line,
     )
-    drawLine(                      // batang
+
+    // Batang penyangga.
+    drawLine(
         color = color,
         start = Offset(cx, s * 0.76f),
         end = Offset(cx, s * 0.92f),
         strokeWidth = line.width,
         cap = StrokeCap.Round,
     )
-    drawLine(                      // kaki
+
+    // Kaki di dasar.
+    drawLine(
         color = color,
         start = Offset(cx - s * 0.17f, s * 0.92f),
         end = Offset(cx + s * 0.17f, s * 0.92f),
@@ -215,4 +272,3 @@ private fun ProcessingPreview() = CalenVoiceTheme {
         onCancel = {},
     )
 }
-
