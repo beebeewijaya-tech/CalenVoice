@@ -2,6 +2,7 @@ package com.bee.calenvoice
 
 import com.bee.calenvoice.data.CalendarRepository
 import com.bee.calenvoice.data.InferenceRepository
+import com.bee.calenvoice.data.NoInternetException
 import com.bee.calenvoice.data.SpeechRepository
 import com.bee.calenvoice.model.RecordingState
 import com.bee.calenvoice.model.Reminder
@@ -139,6 +140,23 @@ class VoiceReminderFlowTest {
         assertNotNull(state.reminder)
         assertEquals("Meeting", state.reminder!!.title)
         assertNull(state.error)
+    }
+
+    @Test
+    fun `Gemini gagal maka masuk status error dan reminder tetap kosong`() = runTest {
+        // Alur Alternatif C.
+        val vm = viewModel(
+            FakeSpeech(Result.success(Transcript("ingetin meeting jam 3 besok", 1f))),
+            FakeInference(Result.failure(NoInternetException())),
+        )
+
+        vm.onRecordClicked()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(RecordingState.ERROR, state.recording)
+        assertTrue(state.error!!.contains("internet"))
+        assertNull(state.reminder)
     }
 
     private companion object {
