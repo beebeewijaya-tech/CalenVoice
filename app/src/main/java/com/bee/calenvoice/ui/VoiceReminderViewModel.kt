@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bee.calenvoice.data.CalendarPermissionException
 import com.bee.calenvoice.data.CalendarRepository
+import com.bee.calenvoice.data.GeminiBusyException
 import com.bee.calenvoice.data.GeminiException
 import com.bee.calenvoice.data.GeminiFormatException
 import com.bee.calenvoice.data.InferenceRepository
@@ -284,6 +285,8 @@ class VoiceReminderViewModel(
             "Gagal menghubungi Gemini. Periksa koneksi internet lalu coba lagi."
         is GeminiFormatException ->
             "Hasil dari Gemini tidak terbaca ($message). Coba rekam ulang."
+        is GeminiBusyException ->
+            "Gemini sedang sibuk. Sudah dicoba tiga kali, tetap belum bisa. Coba lagi sebentar."
         is GeminiException ->
             message ?: "Gemini menolak permintaan."
 
