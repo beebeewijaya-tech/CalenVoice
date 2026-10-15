@@ -135,7 +135,8 @@ class GeminiInferenceRepository(
             - title: inti kegiatannya saja, singkat, tanpa menyebut waktu.
             - date: format yyyy-MM-dd.
             - time: format HH:mm, 24 jam. "jam 3 sore" berarti 15:00.
-            - Kalau jam tidak disebut sama sekali, pakai 09:00.
+            - Jangan pernah menebak jam. Kalimat yang masuk ke sini sudah dipastikan
+              menyebut jam beserta angkanya, jadi pakai angka itu apa adanya.
             - Kalau tanggal tidak disebut sama sekali, pakai tanggal hari ini.
 
             Kalimatnya: "$text"

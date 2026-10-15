@@ -106,8 +106,25 @@ class VoiceReminderFlowTest {
 
         val state = vm.uiState.value
         assertEquals(RecordingState.ERROR, state.recording)
-        assertTrue(state.error!!.contains("jam"))
+        assertTrue(state.error!!.contains("jam"))  // pesan menuntun menyebut "jam 3"
         assertFalse("Gemini tidak boleh dipanggil kalau validasi gagal", inference.dipanggil)
+        assertNull(state.reminder)
+    }
+
+    @Test
+    fun `jam tanpa angka ditolak dan Gemini tidak dipanggil`() = runTest {
+        // FR-06 dengan aturan ketat: kata kunci saja belum menunjukkan pukul berapa,
+        // dan sistem tidak boleh menebak jam default (SRS 1.2 dan 1.3).
+        val inference = FakeInference(Result.success(CONTOH))
+        val vm = viewModel(FakeSpeech(Result.success(Transcript("ingetin meeting jam", 1f))), inference)
+
+        vm.onRecordClicked()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(RecordingState.ERROR, state.recording)
+        assertTrue("Pesan harus menuntun menyebut angka", state.error!!.contains("angka"))
+        assertFalse("Gemini tidak boleh dipanggil", inference.dipanggil)
         assertNull(state.reminder)
     }
 

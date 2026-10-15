@@ -79,7 +79,7 @@ class VoiceReminderViewModel(
      * 1. Izin mikrofon belum ada, minta View menampilkan dialog dulu (Alur Alternatif B).
      * 2. Rekam sampai pengguna diam atau 60 detik terlewati (FR-02, FR-03, FR-04).
      * 3. Teks kosong, berhenti dengan pesan (FR-05).
-     * 4. Tidak ada kata "jam" atau "pukul", minta ucap ulang (FR-06, Alur Alternatif A).
+     * 4. Jam tidak disebut lengkap dengan angkanya, minta ucap ulang (FR-06, Alur Alternatif A).
      * 5. Lolos, status Processing lalu teks diserahkan ke Gemini (FR-08, FR-09).
      * 6. Gemini gagal, tawarkan Coba Lagi (Alur Alternatif C).
      */
@@ -110,12 +110,14 @@ class VoiceReminderViewModel(
                         // FR-05: tidak ada yang terdengar.
                         result.isEmpty() -> fail(NoSpeechException())
 
-                        // FR-06: ucapan harus menyebut jam atau pukul (Alur Alternatif A).
-                        !result.hasTimeKeyword() -> _uiState.update {
+                        // FR-06: jam harus disebut lengkap dengan angkanya (Alur Alternatif A).
+                        // Sistem sengaja tidak menebak jam default, sesuai SRS 1.2 dan 1.3.
+                        !result.hasTimeWithNumber() -> _uiState.update {
                             it.copy(
                                 recording = RecordingState.ERROR,
                                 transcriptText = result.text,
-                                error = "Ucapan harus menyebut \"jam\" atau \"pukul\". Coba rekam ulang.",
+                                error = "Sebutkan jamnya beserta angkanya, misalnya \"jam 3\" atau " +
+                                        "\"pukul 14\". Coba rekam ulang.",
                             )
                         }
 
